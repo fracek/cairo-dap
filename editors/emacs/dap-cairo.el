@@ -9,18 +9,18 @@
   "Populate CONF with the required arguments."
   (let ((cwd (lsp-find-session-folder (lsp-session) (buffer-file-name))))
     (-> conf
-      (dap--put-if-absent :dap-server-path dap-cairo-debug-program)
-      (dap--put-if-absent :task-args (list "--layout=small"))
-      (dap--put-if-absent :type "cairo_dap")
-      (dap--put-if-absent :targe (read-file-name "Select file to debug."))
-      (dap--put-if-absent :projectDir cwd)
-      (dap--put-if-absent :cwd cwd))))
+      (dap--put-if-absent :type "cairo")
+      (dap--put-if-absent :cwd cwd)
+      (dap--put-if-absent :debugServer 9999)
+      (dap--put-if-absent :port 9999)
+      (dap--put-if-absent :hostName "localhost")
+      (dap--put-if-absent :host "localhost"))))
 
 (dap-register-debug-provider "cairo" 'dap-cairo--populate-start-file-args)
 
 (dap-register-debug-template "Run Cairo"
 			     (list :type "cairo"
-				   :request "launch"
+				   :request "attach"
 				   :cwd nil
 				   :program nil
 				   :name "Cairo::Run"))

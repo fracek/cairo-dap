@@ -16,8 +16,9 @@ func compute_sum(n : felt) -> (sum : felt):
     return (sum=new_sum)
 end
 
+# VS Code: set allow breakpoints everywhere
 func main{output_ptr : felt*}():
-    let (res) = compute_sum(n=10)
+    let (res) = compute_sum(n=3)
 
     # Output the result.
     serialize_word(res)

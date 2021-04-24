@@ -3,17 +3,15 @@ Cairo DAP cli entrypoint.
 """
 import argparse
 import asyncio
-import logging
 import json
+import logging
 import sys
 import tempfile
 
-from starkware.cairo.lang.tracer.tracer_data import TracerData
+from starkware.cairo.lang.compiler.program import Program
 from starkware.cairo.lang.instances import LAYOUTS
-from starkware.cairo.lang.compiler.program import Program, ProgramBase
-from starkware.cairo.lang.vm.cairo_runner import CairoRunner
-from starkware.cairo.lang.vm.memory_dict import MemoryDict
 
+from cairo_dap.runner import Runner
 from cairo_dap.server import serve
 
 
@@ -59,17 +57,11 @@ async def cairo_dap(args):
         debug_info_file = tempfile.NamedTemporaryFile(mode='w')
 
     program = _load_program(args.program)
-    initial_memory = MemoryDict()
-
-    runner = CairoRunner(program=program, layout=args.layout, memory=initial_memory, proof_mode=False)
-
-    runner.initialize_segments()
-    end = runner.initialize_main_entrypoint()
-
     program_input = json.load(args.program_input) if args.program_input else {}
-    runner.initialize_vm(hint_locals={'program_input': program_input})
 
-    await serve(port=9999)
+    runner = Runner(program, program_input, args.layout)
+
+    await serve(runner, port=9999)
 
 
 def _load_program(program):
