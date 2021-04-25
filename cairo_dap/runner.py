@@ -73,11 +73,41 @@ class Runner:
     def variables(self, variables_ref):
         return self._frame_data.variables_by_reference[variables_ref]
 
-    def step(self):
+    def step_in(self):
+        # Just execute one step, going inside a function if necessary.
         self._runner.vm_step()
         self._compute_frame_data()
 
+    def step_over(self):
+        runner = self._runner
+        current_stack_size = len(runner.vm.run_context.get_traceback_entries())
+        while True:
+            runner.vm_step()
+            new_current_stack_size = len(runner.vm.run_context.get_traceback_entries())
+            # Exit when at the same stack location as the start.
+            if new_current_stack_size <= current_stack_size:
+                break
+        self._compute_frame_data()
+
+    def step_out(self):
+        # Execute vm step until stack frame size is reduced by one.
+        runner = self._runner
+        current_stack_size = len(runner.vm.run_context.get_traceback_entries())
+        if current_stack_size == 0:
+            # inside main.
+            runner.vm_step()
+            self._compute_frame_data()
+        else:
+            while True:
+                runner.vm_step()
+                new_current_stack_size = len(runner.vm.run_context.get_traceback_entries())
+                # Exit when we're outside start stack location.
+                if new_current_stack_size < current_stack_size:
+                    break
+            self._compute_frame_data()
+
     def has_exited(self):
+        print('Has exited? ', self._runner.vm.run_context.pc, self._runner.final_pc)
         return self._runner.vm.run_context.pc == self._runner.final_pc
 
     def continue_until_breakpoint(self):
@@ -107,6 +137,8 @@ class Runner:
         #
         # The client will ask for this data in separate requests, but we compute
         # everything in this function.
+        if self.has_exited():
+            return
 
         frame_data = FrameData()
         cwd = Path.cwd()

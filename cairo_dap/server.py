@@ -91,13 +91,22 @@ class Server:
     async def on_pause(self, request):
         await self.output.send_response(request, {})
 
-        self.runner.step()
-        await self.output.send_event('stopped', {
-            'reason': 'step',
-            'threadId': 0,
-            'allThreadsStopped': True
-        })
-        await self._check_if_exited()
+        self.runner.step_over()
+        await self._send_stopped('step')
+
+    @dispatcher.register('stepOut')
+    async def on_step_out(self, request):
+        await self.output.send_response(request, {})
+
+        self.runner.step_out()
+        await self._send_stopped('step')
+
+    @dispatcher.register('stepIn')
+    async def on_step_in(self, request):
+        await self.output.send_response(request, {})
+
+        self.runner.step_in()
+        await self._send_stopped('step')
 
     @dispatcher.register('setFunctionBreakpoints')
     async def on_set_function_breakpoints(self, request):
@@ -149,6 +158,14 @@ class Server:
             'supportsRestartRequest': False,
             'supportsReadMemoryRequest': True,
         }
+
+    async def _send_stopped(self, reason):
+        await self.output.send_event('stopped', {
+            'reason': reason,
+            'threadId': 0,
+            'allThreadsStopped': True
+        })
+        await self._check_if_exited()
 
     async def _check_if_exited(self):
         if self.runner.has_exited():
