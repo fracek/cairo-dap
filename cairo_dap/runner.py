@@ -33,29 +33,66 @@ class Runner:
 
         self._runner.vm.get_traceback()
 
-        self._breakpoints = []
+        self._function_breakpoints = []
+        self._source_breakpoints = dict()
         self._frame_data = FrameData()
+
+        self._cwd = Path.cwd()
 
     def add_function_breakpoint(self, breakpoint):
         func_name = breakpoint['name']
         try:
-            pc = self._runner.program.get_label(func_name)
-            _logger.info('Added breakpoint: %s %d', func_name, pc)
+            offset = self._runner.program.get_label(func_name)
+            pc = self._runner.program_base + offset
+            _logger.info('Added breakpoint: %s %s', func_name, pc)
         except MissingIdentifierError:
             _logger.info('Breakpoint not found: %s', func_name)
-            return None
+            return {
+                'id': breakpoint['id'],
+                'verified': False,
+            }
 
-        breakpoint = {
-            'id': breakpoint['id'],
-            'pc': pc
-        }
+        new_breakpoint = self._create_breakpoint_at_pc(pc)
+        new_breakpoint['id'] = breakpoint['id']
 
-        self._breakpoints.append(breakpoint)
+        self._function_breakpoints.append(new_breakpoint)
 
-        return {
-            'id': breakpoint['id'],
-            'verified': True,
-        }
+        return _breakpoint_json_data(new_breakpoint)
+
+    def add_source_breakpoints(self, source, breakpoints):
+        new_breakpoints = []
+        path = source['path']
+
+        locations_in_file = []
+        for instruction, location in self._runner.vm.instruction_debug_info.items():
+            location_path = str(self._cwd / location.inst.input_file.filename)
+            if location_path == path:
+                locations_in_file.append((location, instruction))
+
+        for breakpoint in breakpoints:
+            line = breakpoint['line']
+            prev_line = None
+            for location, pc in locations_in_file:
+                start_line = location.inst.start_line
+                end_line = location.inst.end_line
+
+                if start_line <= line <= end_line:
+                    _logger.debug('Adding source breakpoint at %s', pc)
+                    new_breakpoint = self._create_breakpoint_at_pc(pc)
+                    new_breakpoints.append(new_breakpoint)
+                elif prev_line is None:
+                    pass
+                elif prev_line < line <= end_line:
+                    # If the user clicked on a comment or empty line,
+                    # add breakpoint to the next instruction.
+                    _logger.debug('Adding source breakpoint (empty line) at %s', pc)
+                    new_breakpoint = self._create_breakpoint_at_pc(pc)
+                    new_breakpoints.append(new_breakpoint)
+
+                prev_line = end_line
+
+        self._source_breakpoints[path] = new_breakpoints
+        return [_breakpoint_json_data(bp) for bp in new_breakpoints]
 
     def stack_trace(self, start_frame, levels):
         frames = self._frame_data.frames
@@ -75,14 +112,16 @@ class Runner:
 
     def step_in(self):
         # Just execute one step, going inside a function if necessary.
-        self._runner.vm_step()
+        self._vm_step()
         self._compute_frame_data()
 
     def step_over(self):
         runner = self._runner
         current_stack_size = len(runner.vm.run_context.get_traceback_entries())
         while True:
-            runner.vm_step()
+            breakpoint_hit = self._vm_step()
+            if breakpoint_hit:
+                break
             new_current_stack_size = len(runner.vm.run_context.get_traceback_entries())
             # Exit when at the same stack location as the start.
             if new_current_stack_size <= current_stack_size:
@@ -95,11 +134,13 @@ class Runner:
         current_stack_size = len(runner.vm.run_context.get_traceback_entries())
         if current_stack_size == 0:
             # inside main.
-            runner.vm_step()
+            self._vm_step()
             self._compute_frame_data()
         else:
             while True:
-                runner.vm_step()
+                breakpoint_hit = self._vm_step()
+                if breakpoint_hit:
+                    break
                 new_current_stack_size = len(runner.vm.run_context.get_traceback_entries())
                 # Exit when we're outside start stack location.
                 if new_current_stack_size < current_stack_size:
@@ -107,27 +148,43 @@ class Runner:
             self._compute_frame_data()
 
     def has_exited(self):
-        print('Has exited? ', self._runner.vm.run_context.pc, self._runner.final_pc)
         return self._runner.vm.run_context.pc == self._runner.final_pc
 
     def continue_until_breakpoint(self):
-        runner = self._runner
         while True:
-            breakpoint_hit = False
-            for breakpoint in self._breakpoints:
-                if runner.vm.run_context.pc == breakpoint['pc']:
-                    breakpoint_hit = True
-                    break
-
-            if breakpoint_hit:
+            breakpoint_hit = self._vm_step()
+            if breakpoint_hit or self.has_exited():
                 break
-
-            if runner.vm.run_context.pc == runner.final_pc:
-                break
-
-            runner.vm_step()
 
         self._compute_frame_data()
+
+    def _vm_step(self):
+        runner = self._runner
+
+        # Already at end of program
+        if runner.vm.run_context.pc == runner.final_pc:
+            return False
+
+        runner.vm_step()
+
+        source_breakpoints = [
+            bp for breakpoints in self._source_breakpoints.values()
+            for bp in breakpoints
+        ]
+
+        for breakpoint in self._function_breakpoints + source_breakpoints:
+            if runner.vm.run_context.pc == breakpoint['pc']:
+                return True
+
+        return False
+
+    def _create_breakpoint_at_pc(self, pc):
+        frame = _frame_at_pc(self._cwd, self._runner, pc)
+        return {
+            'verified': True,
+            'pc': pc,
+            **frame,
+        }
 
     def _compute_frame_data(self):
         # Compute stack frame data.
@@ -141,7 +198,7 @@ class Runner:
             return
 
         frame_data = FrameData()
-        cwd = Path.cwd()
+        cwd = self._cwd
         runner = self._runner
 
         frame, scopes_with_variables = _frame_data_at_pc(cwd, runner, runner.vm.run_context.pc)
@@ -224,6 +281,10 @@ def _variables_at_pc(runner, pc):
                 'variablesReference': 0,
             })
     return variables
+
+
+def _breakpoint_json_data(bp):
+    return dict((k, bp.get(k)) for k in ['id', 'verified', 'source', 'line', 'column', 'endLine', 'endColumn'])
 
 
 class WatchEvaluator(ExpressionEvaluator):

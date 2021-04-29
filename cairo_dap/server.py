@@ -108,19 +108,25 @@ class Server:
         self.runner.step_in()
         await self._send_stopped('step')
 
+    @dispatcher.register('setBreakpoints')
+    async def on_set_breakpoints(self, request):
+        source = request.arguments['source']
+        breakpoints_req = request.arguments.get('breakpoints')
+        if breakpoints_req is None:
+            await self.output.send_error_response(request, 'missing breakpoints argument', 'missing breakpoints argument', {})
+
+        breakpoints = self.runner.add_source_breakpoints(source, breakpoints_req)
+
+        await self.output.send_response(request, {'breakpoints': breakpoints})
+
     @dispatcher.register('setFunctionBreakpoints')
     async def on_set_function_breakpoints(self, request):
         breakpoints = [
             self.runner.add_function_breakpoint(breakpoint)
             for breakpoint in request.arguments['breakpoints']
-            if breakpoint is not None
         ]
 
         await self.output.send_response(request, {'breakpoints': breakpoints})
-
-    @dispatcher.register('breakpointLocations')
-    async def on_set_function_breakpoints(self, request):
-        await self.output.send_response(request, {'breakpoints': []})
 
     @dispatcher.register('threads')
     async def on_threads(self, request):
@@ -153,7 +159,7 @@ class Server:
         return {
             'supportsConfigurationDoneRequest': True,
             'supportsFunctionBreakpoints': True,
-            'supportsBreakpointLocationsRequest': True,
+            'supportsBreakpointLocationsRequest': False,
             'supportsStepBack': False,
             'supportsRestartRequest': False,
             'supportsReadMemoryRequest': True,
