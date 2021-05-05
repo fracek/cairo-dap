@@ -1,20 +1,12 @@
 import logging
 from pathlib import Path
 
+from starkware.cairo.lang.compiler.identifier_definition import ReferenceDefinition
 from starkware.cairo.lang.compiler.identifier_manager import MissingIdentifierError
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
-from starkware.cairo.lang.compiler.expression_evaluator import ExpressionEvaluator
-from starkware.cairo.lang.compiler.substitute_identifiers import substitute_identifiers
-from starkware.cairo.lang.compiler.type_system_visitor import simplify_type_system
-from starkware.cairo.lang.compiler.parser import parse_expr
-from starkware.cairo.lang.compiler.identifier_definition import ConstDefinition, ReferenceDefinition
-from starkware.cairo.lang.compiler.identifier_utils import resolve_search_result
-from starkware.cairo.lang.compiler.offset_reference import OffsetReferenceDefinition
-from starkware.cairo.lang.compiler.scoped_name import ScopedName
-from starkware.cairo.lang.compiler.ast.expr import ExprConst, ExprIdentifier
-from starkware.cairo.lang.compiler.references import FlowTrackingError, SubstituteRegisterTransformer
-from starkware.cairo.lang.compiler.ast.cairo_types import TypeStruct
+
+from cairo_dap.watch_evaluator import WatchEvaluator
 
 _logger = logging.getLogger(__name__)
 
@@ -264,13 +256,12 @@ def _frame_at_pc(cwd, runner, pc):
 
 
 def _variables_at_pc(runner, pc):
-    # TODO: what's the implication of not relocating?
     pc_offset = pc - runner.program_base
     scope_name = runner.program.debug_info.instruction_locations[pc_offset].accessible_scopes[-1]
     scope_items = runner.program.identifiers.get_scope(scope_name).identifiers
 
     variables = []
-    watch_evaluator = WatchEvaluator(runner.program, runner.vm.run_context, runner.program_base)
+    watch_evaluator = WatchEvaluator(runner, runner.program, runner.vm.run_context, runner.program_base)
 
     for name, identifier_definition in scope_items.items():
         if isinstance(identifier_definition, ReferenceDefinition):
@@ -285,22 +276,3 @@ def _variables_at_pc(runner, pc):
 
 def _breakpoint_json_data(bp):
     return dict((k, bp.get(k)) for k in ['id', 'verified', 'source', 'line', 'column', 'endLine', 'endColumn'])
-
-
-class WatchEvaluator(ExpressionEvaluator):
-    def __init__(self, program, run_context, program_base):
-        super().__init__(program.prime, ap=run_context.ap, fp=run_context.fp, memory=run_context.memory)
-
-        self.program = program
-        self.pc = run_context.pc
-        self.ap = run_context.ap
-        self.fp = run_context.fp
-        self.program_base = program_base
-
-        pc_offset = self.pc - program_base
-        self.accessible_scopes = program.debug_info.instruction_locations[pc_offset].accessible_scopes
-
-    def eval(self, expr):
-        if expr == 'null':
-            return ''
-        return 'TODO'
