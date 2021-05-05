@@ -36,7 +36,7 @@ class Event(Message):
         }
 
     def __str__(self):
-        return 'Event(seq={}, event={}, body={})'.format(self.seq, self.event, self.body)
+        return f'Event(seq={self.seq}, event={self.event}, body={self.body})'
 
 
 class Request(Message):
@@ -61,7 +61,7 @@ class Request(Message):
         }
 
     def __str__(self):
-        return 'Request(seq={}, command={}, arguments={})'.format(self.seq, self.command, self.arguments)
+        return f'Request(seq={self.seq}, command={self.command}, arguments={self.arguments})'
 
 
 class Response(Message):
@@ -95,9 +95,7 @@ class Response(Message):
         }
 
     def __str__(self):
-        return 'Request(seq={}, request_seq={}, success={}, command={}, message={}, body={})'.format(
-            self.seq, self.request_seq, self.success, self.command, self.message, self.body
-        )
+        return f'Request(seq={self.seq}, request_seq={self.request_seq}, success={self.success}, command={self.command}, message={self.message}, body={self.body})'
 
 
 _message_parsers = {
@@ -121,7 +119,7 @@ async def read_message(reader: asyncio.StreamReader):
 
     body_type = body['type']
     if body_type not in _message_parsers:
-        raise RuntimeError('Invalid message type: {}'.format(body_type))
+        raise RuntimeError(f'Invalid message type: {body_type}')
 
     parser = _message_parsers[body_type]
     return parser(body)

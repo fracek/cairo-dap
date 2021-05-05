@@ -175,6 +175,11 @@ class Server:
 
     async def _check_if_exited(self):
         if self.runner.has_exited():
+            for output_val in self.runner.program_output():
+                await self.output.send_event('output', {
+                    'category': 'console',
+                    'output': output_val
+                })
             await self.output.send_event('exited', {
                 'exitCode': 0,
             })

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from starkware.cairo.lang.compiler.identifier_definition import ReferenceDefinition
 from starkware.cairo.lang.compiler.identifier_manager import MissingIdentifierError
+from starkware.cairo.lang.compiler.expression_simplifier import to_field_element
 from starkware.cairo.lang.vm.cairo_runner import CairoRunner
 from starkware.cairo.lang.vm.memory_dict import MemoryDict
 
@@ -28,6 +29,8 @@ class Runner:
         self._function_breakpoints = []
         self._source_breakpoints = dict()
         self._frame_data = FrameData()
+
+        self._has_relocated = False
 
         self._cwd = Path.cwd()
 
@@ -150,6 +153,25 @@ class Runner:
 
         self._compute_frame_data()
 
+    def program_output(self):
+        if not self._has_relocated:
+            yield from []
+            return
+
+        runner = self._runner
+        if 'output_builtin' not in runner.builtin_runners:
+            yield from []
+            return
+
+        output_runner = runner.builtin_runners['output_builtin']
+        _, size = output_runner.get_used_cells_and_allocated_size(runner)
+        for i in range(size):
+            val = runner.vm_memory.get(output_runner.base + i)
+            if val is not None:
+                yield f'{to_field_element(val=val, prime=runner.program.prime)}'
+            else:
+                yield '<missing>'
+
     def _vm_step(self):
         runner = self._runner
 
@@ -187,6 +209,7 @@ class Runner:
         # The client will ask for this data in separate requests, but we compute
         # everything in this function.
         if self.has_exited():
+            self._relocate()
             return
 
         frame_data = FrameData()
@@ -201,6 +224,17 @@ class Runner:
             frame_data.add_frame_data(frame, scopes_with_variables)
 
         self._frame_data = frame_data
+
+    def _relocate(self):
+        if self._has_relocated:
+            return
+
+        runner = self._runner
+        runner.end_run()
+        runner.finalize_segments_by_effective_size()
+        runner.relocate()
+
+        self._has_relocated = True
 
 
 class FrameData:
