@@ -92,9 +92,14 @@ class Runner:
     def stack_trace(self, start_frame, levels):
         frames = self._frame_data.frames
 
+        if start_frame is None or levels is None:
+            filter = lambda i: True
+        else:
+            filter = lambda i: start_frame <= i < start_frame + levels
+
         filtered_frames = [
             frame for i, frame in enumerate(frames)
-            if start_frame <= i < start_frame + levels
+            if filter(i)
         ]
 
         return filtered_frames, len(frames)

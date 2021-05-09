@@ -136,7 +136,7 @@ class Server:
     @dispatcher.register('stackTrace')
     async def on_stack_trace(self, request):
         args = request.arguments
-        stack_frames, total_frames = self.runner.stack_trace(args['startFrame'], args['levels'])
+        stack_frames, total_frames = self.runner.stack_trace(args.get('startFrame'), args.get('levels'))
         await self.output.send_response(request, {'stackFrames': stack_frames, 'totalFrames': total_frames})
 
     @dispatcher.register('scopes')
@@ -178,7 +178,7 @@ class Server:
             for output_val in self.runner.program_output():
                 await self.output.send_event('output', {
                     'category': 'console',
-                    'output': output_val
+                    'output': f'{output_val}\n'
                 })
             await self.output.send_event('exited', {
                 'exitCode': 0,
