@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Cairo DAP" src="https://raw.githubusercontent.com/fracek/cairo-dap/main/.images/cairo-dap-logo.png">
+  <img width="256" height="256" alt="Cairo DAP" src="https://raw.githubusercontent.com/fracek/cairo-dap/main/.images/cairo-dap-logo.png">
 </p>
 
 # Cairo Debugger Adapter Protocol Server
